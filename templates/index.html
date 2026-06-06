@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>TAUs Strategy PObot</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700;800&display=swap');
+:root {
+  --bg:#030912;--panel:#080f1e;--border:#0d2540;--accent:#00c8ff;
+  --green:#00ff88;--red:#ff3355;--yellow:#ffcc00;--orange:#ff8800;
+  --text:#c0d8f0;--dim:#3a6080;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:'Exo 2',sans-serif;min-height:100vh;
+background-image:radial-gradient(ellipse at 10% 0%,rgba(0,200,255,0.06) 0%,transparent 50%),
+radial-gradient(ellipse at 90% 100%,rgba(0,255,136,0.04) 0%,transparent 50%)}
+.header{background:linear-gradient(135deg,#080f1e,#0c1a2e);border-bottom:1px solid var(--border);
+padding:14px 16px;display:flex;align-items:center;justify-content:space-between;
+position:sticky;top:0;z-index:100}
+.header-left h1{font-size:15px;font-weight:800;color:var(--accent);letter-spacing:1.5px;text-transform:uppercase}
+.header-left p{font-size:10px;color:var(--dim);letter-spacing:1px;margin-top:2px}
+.conn-badge{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.3);
+border:1px solid var(--border);border-radius:20px;padding:5px 10px;font-size:10px;
+font-family:'Share Tech Mono',monospace}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:var(--dim);transition:all 0.3s}
+.conn-dot.on{background:var(--green);box-shadow:0 0 8px rgba(0,255,136,0.6);animation:blink 2s infinite}
+.conn-dot.off{background:var(--red)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.5}}
+.body{padding:12px;max-width:480px;margin:0 auto}
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px}
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 6px;text-align:center}
+.stat-card .sv{font-family:'Share Tech Mono',monospace;font-size:16px;font-weight:bold;color:var(--accent)}
+.stat-card .sl{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:0.8px;margin-top:3px}
+.sec-title{font-size:10px;font-weight:700;color:var(--accent);letter-spacing:2px;text-transform:uppercase;
+margin-bottom:8px;padding-left:2px;display:flex;align-items:center;gap:6px}
+.sec-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.toggle-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.toggle-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px;
+display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:all 0.2s;user-select:none}
+.toggle-card:active{transform:scale(0.97)}
+.toggle-card.active{border-color:rgba(0,200,255,0.3);background:rgba(0,200,255,0.05)}
+.toggle-info .tl{font-size:11px;font-weight:600;color:var(--text)}
+.toggle-info .ts{font-size:9px;color:var(--dim);margin-top:2px}
+.toggle-sw{width:36px;height:20px;background:var(--dim);border-radius:10px;position:relative;transition:background 0.3s;flex-shrink:0}
+.toggle-sw::after{content:'';position:absolute;width:16px;height:16px;background:white;border-radius:50%;top:2px;left:2px;transition:left 0.3s}
+.toggle-sw.on{background:var(--accent)}
+.toggle-sw.on::after{left:18px}
+.scanning-bar{background:var(--panel);border:1px solid var(--border);border-radius:8px;
+padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:12px;
+font-family:'Share Tech Mono',monospace;font-size:11px}
+.scan-pulse{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.4);opacity:0.6}}
+.scan-text{color:var(--text);flex:1}
+.scan-asset{color:var(--accent)}
+.signal-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+padding:12px;margin-bottom:8px;animation:slideIn 0.3s ease;position:relative;overflow:hidden}
+.signal-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}
+.signal-card.buy::before{background:var(--green)}
+.signal-card.sell::before{background:var(--red)}
+.signal-card.entry{border-color:rgba(255,204,0,0.3)}
+.signal-card.entry::after{content:'ENTER NOW';position:absolute;top:8px;right:8px;
+background:var(--yellow);color:#000;font-size:8px;font-weight:800;padding:2px 6px;
+border-radius:4px;letter-spacing:1px}
+@keyframes slideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.signal-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sig-dir{font-size:12px;font-weight:800;padding:2px 8px;border-radius:4px;letter-spacing:1px}
+.sig-dir.buy{background:rgba(0,255,136,0.15);color:var(--green)}
+.sig-dir.sell{background:rgba(255,51,85,0.15);color:var(--red)}
+.sig-asset{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--accent);font-weight:bold}
+.sig-time{margin-left:auto;font-size:10px;color:var(--dim);font-family:'Share Tech Mono',monospace}
+.sig-level{font-size:11px;color:var(--text);margin-bottom:4px}
+.sig-badge{background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;
+padding:1px 6px;font-size:9px;color:var(--dim)}
+.sig-meta{font-size:10px;color:var(--dim);display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.level-bar{display:flex;gap:3px}
+.level-dot{width:20px;height:3px;border-radius:2px;background:var(--border);transition:background 0.3s}
+.level-dot.active{background:var(--accent)}
+.level-dot.entry-dot{background:var(--yellow)}
+.empty-state{text-align:center;padding:40px 20px;color:var(--dim)}
+.empty-state .ei{font-size:40px;margin-bottom:12px}
+.empty-state p{font-size:13px;line-height:1.6}
+.demo-banner{background:rgba(255,136,0,0.1);border:1px solid rgba(255,136,0,0.3);
+border-radius:8px;padding:8px 12px;font-size:11px;color:var(--orange);
+margin-bottom:12px;text-align:center;display:none}
+.demo-banner.show{display:block}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-left">
+    <h1>⚡ TAUs Strategy PObot</h1>
+    <p>POCKET OPTION OTC SCANNER</p>
+  </div>
+  <div class="conn-badge">
+    <div class="conn-dot" id="connDot"></div>
+    <span id="connText">--</span>
+  </div>
+</div>
+<div class="body">
+  <div class="demo-banner" id="demoBanner">
+    ⚠️ DEMO MODE — Add PO_SSID in Render environment variables to connect live
+  </div>
+  <div class="stats-bar">
+    <div class="stat-card"><div class="sv" id="scanCount">0</div><div class="sl">Scans</div></div>
+    <div class="stat-card"><div class="sv" id="signalCount">0</div><div class="sl">Signals</div></div>
+    <div class="stat-card"><div class="sv" id="assetCount">0</div><div class="sl">Assets</div></div>
+    <div class="stat-card"><div class="sv" id="lastScan">--</div><div class="sl">Last Scan</div></div>
+  </div>
+  <div class="scanning-bar">
+    <div class="scan-pulse"></div>
+    <div class="scan-text">Scanning: <span class="scan-asset" id="currentAsset">Initializing...</span></div>
+  </div>
+  <div class="sec-title">⚙️ Controls</div>
+  <div class="toggle-grid">
+    <div class="toggle-card" onclick="toggle('scanning')">
+      <div class="toggle-info"><div class="tl">🔍 Scanning</div><div class="ts">Market scanning</div></div>
+      <div class="toggle-sw" id="sw-scanning"></div>
+    </div>
+    <div class="toggle-card" onclick="toggle('telegram_alerts')">
+      <div class="toggle-info"><div class="tl">✈️ Telegram</div><div class="ts">Alert notifications</div></div>
+      <div class="toggle-sw" id="sw-telegram_alerts"></div>
+    </div>
+    <div class="toggle-card" onclick="toggle('main_strategy')">
+      <div class="toggle-info"><div class="tl">📊 Keltner</div><div class="ts">Main strategy</div></div>
+      <div class="toggle-sw" id="sw-main_strategy"></div>
+    </div>
+    <div class="toggle-card" onclick="toggle('pattern_strategy')">
+      <div class="toggle-info"><div class="tl">🕯 Pattern</div><div class="ts">Pattern recognition</div></div>
+      <div class="toggle-sw" id="sw-pattern_strategy"></div>
+    </div>
+    <div class="toggle-card" onclick="toggle('sound_alerts')">
+      <div class="toggle-info"><div class="tl">🔔 Sound</div><div class="ts">Alert sounds</div></div>
+      <div class="toggle-sw" id="sw-sound_alerts"></div>
+    </div>
+    <div class="toggle-card" onclick="toggle('setup_warnings')">
+      <div class="toggle-info"><div class="tl">⚠️ Warnings</div><div class="ts">Early alerts</div></div>
+      <div class="toggle-sw" id="sw-setup_warnings"></div>
+    </div>
+  </div>
+  <div class="sec-title">📡 Live Signals</div>
+  <div id="signalFeed">
+    <div class="empty-state">
+      <div class="ei">📡</div>
+      <p>Bot is scanning all OTC pairs.<br>Signals appear here when setups are detected.</p>
+    </div>
+  </div>
+</div>
+<script>
+const socket = io();
+let state = {};
+let signalCount = 0;
+
+socket.on('connect', () => {
+  fetch('/api/state').then(r=>r.json()).then(data=>{
+    state = data;
+    updateAllToggles();
+    document.getElementById('scanCount').textContent = data.scan_count||0;
+    document.getElementById('lastScan').textContent = data.last_scan||'--';
+    document.getElementById('assetCount').textContent = data.assets_loaded||0;
+    if(data.signals&&data.signals.length>0){
+      document.getElementById('signalFeed').innerHTML='';
+      data.signals.forEach(s=>addSignalCard(s));
+      signalCount=data.signals.length;
+      document.getElementById('signalCount').textContent=signalCount;
+    }
+  });
+});
+
+socket.on('status_update',(data)=>{
+  const dot=document.getElementById('connDot');
+  const txt=document.getElementById('connText');
+  if(data.connected){
+    dot.className='conn-dot on';
+    txt.textContent=data.demo_mode?'DEMO':'LIVE';
+    if(data.demo_mode)document.getElementById('demoBanner').classList.add('show');
+  }else{dot.className='conn-dot off';txt.textContent='OFF';}
+});
+
+socket.on('assets_loaded',(data)=>{
+  document.getElementById('assetCount').textContent=data.count;
+});
+
+socket.on('new_signal',(signal)=>{
+  const empty=document.querySelector('.empty-state');
+  if(empty)empty.remove();
+  addSignalCard(signal);
+  signalCount++;
+  document.getElementById('signalCount').textContent=signalCount;
+  if(state.sound_alerts)playAlert(signal.entry);
+});
+
+socket.on('scan_update',(data)=>{
+  document.getElementById('scanCount').textContent=data.scan_count;
+  document.getElementById('lastScan').textContent=data.last_scan;
+  document.getElementById('currentAsset').textContent=data.asset;
+});
+
+socket.on('state_update',(data)=>{
+  Object.assign(state,data);
+  updateAllToggles();
+});
+
+function toggle(key){
+  fetch('/api/toggle',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({key})}).then(r=>r.json()).then(data=>{
+    if(data.success){state[key]=data.value;updateToggle(key,data.value);}
+  });
+}
+
+function updateAllToggles(){
+  ['scanning','telegram_alerts','sound_alerts','main_strategy','pattern_strategy','setup_warnings']
+    .forEach(k=>updateToggle(k,state[k]));
+}
+
+function updateToggle(key,val){
+  const sw=document.getElementById(`sw-${key}`);
+  if(!sw)return;
+  sw.className='toggle-sw'+(val?' on':'');
+  const card=sw.closest('.toggle-card');
+  if(card)card.className='toggle-card'+(val?' active':'');
+}
+
+function addSignalCard(signal){
+  const feed=document.getElementById('signalFeed');
+  const isEntry=signal.entry;
+  const isBuy=signal.direction==='BUY';
+  const level=signal.level||1;
+  const card=document.createElement('div');
+  card.className=`signal-card ${isBuy?'buy':'sell'} ${isEntry?'entry':''}`;
+  let dots='';
+  for(let i=1;i<=5;i++){
+    let cls='level-dot';
+    if(i<=level)cls+=isEntry?' entry-dot':' active';
+    dots+=`<div class="${cls}"></div>`;
+  }
+  const stratLabel=signal.strategy==='main'?'Keltner':'Pattern';
+  const patternInfo=signal.pattern_type?
+    `<span class="sig-badge">${signal.pattern_type}</span><span class="sig-badge">${signal.ratio}%</span>`:'';
+  const demoTag=signal.demo?'<span class="sig-badge" style="color:var(--orange)">DEMO</span>':'';
+  card.innerHTML=`
+    <div class="signal-top">
+      <span class="sig-dir ${isBuy?'buy':'sell'}">${signal.direction}</span>
+      <span class="sig-asset">${signal.asset}</span>
+      <span class="sig-time">${signal.time||'--'}</span>
+    </div>
+    <div class="sig-level">${signal.level_name}</div>
+    <div class="sig-meta">
+      <span class="sig-badge">${stratLabel}</span>
+      <span class="sig-badge">M5</span>
+      ${patternInfo}${demoTag}
+    </div>
+    <div class="level-bar">${dots}</div>`;
+  feed.insertBefore(card,feed.firstChild);
+  while(feed.children.length>30)feed.removeChild(feed.lastChild);
+}
+
+function playAlert(isEntry){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain);gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(isEntry?880:440,ctx.currentTime);
+    osc.frequency.setValueAtTime(isEntry?1100:550,ctx.currentTime+0.1);
+    gain.gain.setValueAtTime(0.3,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.4);
+    osc.start(ctx.currentTime);osc.stop(ctx.currentTime+0.4);
+  }catch(e){}
+}
+
+document.getElementById('connDot').className='conn-dot';
+document.getElementById('connText').textContent='Connecting...';
+</script>
+</body>
+</html>
