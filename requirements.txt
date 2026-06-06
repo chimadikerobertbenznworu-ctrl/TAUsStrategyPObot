@@ -1,8 +1,7 @@
-flask==3.0.0
+flask==2.3.3
 flask-socketio==5.3.6
 requests==2.31.0
 python-dotenv==1.0.0
 pocket-option==0.1.0
-gevent==23.9.1
-gevent-websocket==0.10.1
 gunicorn==21.2.0
+simple-websocket==0.10.1
