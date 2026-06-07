@@ -456,4 +456,127 @@ async def connect_pocket_option():
                                 if asset and payload:
                                     candle = {
                                         'time': payload.get('time', 0),
-                                        'open': float(payload.get('o
+                                        'open': float(payload.get('open', 0)),
+                        'close': float(payload.get('close', 0)),
+                        'high': float(payload.get('high', 0)),
+                        'low': float(payload.get('low', 0))
+                    }
+                    if asset not in candle_store:
+                        candle_store[asset] = []
+                    candle_store[asset].append(candle)
+                    candle_store[asset] = candle_store[asset][-50:]
+                    run_analysis(asset)
+
+        except Exception as e:
+            print(f"Parse error: {e} — {message[:100]}")
+            continue
+
+    except Exception as e:
+        print(f"Endpoint failed: {e}")
+        await asyncio.sleep(3)
+        continue
+
+    print("All endpoints failed — switching to demo mode")
+    await demo_mode()
+
+
+async def demo_mode():
+    import random
+    bot_state['connected'] = True
+    bot_state['connection_status'] = "Demo Mode"
+    bot_state['assets_loaded'] = len(KNOWN_OTC_ASSETS)
+    socketio.emit('status_update', {
+        'connected': True,
+        'demo_mode': True,
+        'status': 'Demo Mode — Update SSID to connect live'
+    })
+    names = {
+        2: "Price Approaching Keltner Zone",
+        3: "Candle 1 Closed — Watch Confirmation",
+        5: "ENTRY SIGNAL"
+    }
+    while bot_state['scanning']:
+        asset = random.choice(KNOWN_OTC_ASSETS)
+        level = random.choice([2, 3, 5])
+        signal = {
+            "asset": asset,
+            "direction": random.choice(["BUY", "SELL"]),
+            "strategy": random.choice(["main", "pattern"]),
+            "level": level,
+            "level_name": names[level],
+            "entry": level == 5,
+            "demo": True
+        }
+        process_signal(signal)
+        await asyncio.sleep(10)
+
+
+def run_bot():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    while True:
+        try:
+            loop.run_until_complete(connect_pocket_option())
+        except Exception as e:
+            print(f"Bot error: {e}")
+        time.sleep(5)
+
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/api/state')
+def get_state():
+    return jsonify({
+        k: bot_state[k] for k in [
+            "scanning", "telegram_alerts", "sound_alerts",
+            "main_strategy", "pattern_strategy", "setup_warnings",
+            "connected", "scan_count", "last_scan",
+            "assets_loaded", "signals", "connection_status"
+        ]
+    })
+
+@app.route('/api/toggle', methods=['POST'])
+def toggle():
+    key = request.json.get('key')
+    if key in bot_state:
+        bot_state[key] = not bot_state[key]
+        socketio.emit('state_update', {key: bot_state[key]})
+        return jsonify({"success": True, "value": bot_state[key]})
+    return jsonify({"success": False})
+
+@app.route('/api/update_ssid', methods=['POST'])
+def update_ssid():
+    global SSID
+    new_ssid = request.json.get('ssid', '').strip()
+    if not new_ssid:
+        return jsonify({"success": False, "message": "Empty SSID"})
+    SSID = new_ssid
+    bot_state['connected'] = False
+    bot_state['connection_status'] = "Reconnecting with new SSID..."
+    socketio.emit('status_update', {
+        'connected': False,
+        'status': 'Reconnecting with new SSID...'
+    })
+    t = threading.Thread(target=run_bot, daemon=True)
+    t.start()
+    return jsonify({"success": True, "message": "SSID updated. Reconnecting..."})
+
+@app.route('/ping')
+def ping():
+    return "OK", 200
+
+@socketio.on('connect')
+def on_connect():
+    emit('state_update', bot_state)
+    emit('status_update', {
+        'connected': bot_state['connected'],
+        'status': bot_state['connection_status']
+    })
+
+if __name__ == '__main__':
+    t = threading.Thread(target=run_bot, daemon=True)
+    t.start()
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
