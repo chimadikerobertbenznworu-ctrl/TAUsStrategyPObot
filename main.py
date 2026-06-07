@@ -457,28 +457,29 @@ async def connect_pocket_option():
                                     candle = {
                                         'time': payload.get('time', 0),
                                         'open': float(payload.get('open', 0)),
-                        'close': float(payload.get('close', 0)),
-                        'high': float(payload.get('high', 0)),
-                        'low': float(payload.get('low', 0))
-                    }
-                    if asset not in candle_store:
-                        candle_store[asset] = []
-                    candle_store[asset].append(candle)
-                    candle_store[asset] = candle_store[asset][-50:]
-                    run_analysis(asset)
+                                        'close': float(payload.get('close', 0)),
+                                        'high': float(payload.get('high', 0)),
+                                        'low': float(payload.get('low', 0))
+                                    }
+                                    if asset not in candle_store:
+                                        candle_store[asset] = []
+                                    candle_store[asset].append(candle)
+                                    candle_store[asset] = candle_store[asset][-50:]
+                                    run_analysis(asset)
+
+                        except Exception as e:
+                            print(f"Parse error: {e} — {message[:100]}")
+                            continue
 
         except Exception as e:
-            print(f"Parse error: {e} — {message[:100]}")
+            print(f"Endpoint {endpoint} failed: {e}")
+            await asyncio.sleep(3)
             continue
-
-    except Exception as e:
-        print(f"Endpoint failed: {e}")
-        await asyncio.sleep(3)
-        continue
 
     print("All endpoints failed — switching to demo mode")
     await demo_mode()
 
+# ── DEMO MODE ─────────────────────────────────────────────────────────────────
 
 async def demo_mode():
     import random
@@ -510,6 +511,7 @@ async def demo_mode():
         process_signal(signal)
         await asyncio.sleep(10)
 
+# ── BOT THREAD ────────────────────────────────────────────────────────────────
 
 def run_bot():
     loop = asyncio.new_event_loop()
@@ -521,6 +523,7 @@ def run_bot():
             print(f"Bot error: {e}")
         time.sleep(5)
 
+# ── FLASK ROUTES ──────────────────────────────────────────────────────────────
 
 @app.route('/')
 def index():
